@@ -2,6 +2,8 @@ package limiter_test
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -139,4 +141,47 @@ func TestAllow_RemainingDecrementsCorrectly(t *testing.T) {
 		assert.True(t, res.Allowed)
 		assert.Equal(t, want, res.Remaining, "after request %d", i+1)
 	}
+}
+
+// TestAllow_ConcurrentRequests fires N goroutines simultaneously against the
+// same bucket and asserts that the number of allowed requests never exceeds
+// capacity. This catches races where non-atomic read-modify-write would let
+// more requests through than the limit allows.
+func TestAllow_ConcurrentRequests(t *testing.T) {
+	rdb, _ := setupRedis(t)
+	tb := limiter.NewTokenBucket(rdb)
+	cfg := limiter.BucketConfig{Capacity: 10, RefillRate: 1}
+
+	const goroutines = 50
+	var (
+		wg      sync.WaitGroup
+		allowed atomic.Int64
+		denied  atomic.Int64
+	)
+
+	// barrier so all goroutines hit Allow at roughly the same time
+	start := make(chan struct{})
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			res, err := tb.Allow(context.Background(), "concurrent-user", "/feed", cfg)
+			require.NoError(t, err)
+			if res.Allowed {
+				allowed.Add(1)
+			} else {
+				denied.Add(1)
+			}
+		}()
+	}
+
+	close(start) // release all goroutines at once
+	wg.Wait()
+
+	assert.LessOrEqual(t, allowed.Load(), int64(cfg.Capacity),
+		"allowed requests must not exceed bucket capacity")
+	assert.Equal(t, int64(goroutines), allowed.Load()+denied.Load(),
+		"every request must be either allowed or denied")
 }
