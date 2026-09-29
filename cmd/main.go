@@ -6,6 +6,8 @@ import (
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/config"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/db"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/handler"
+	"github.com/Nikhil-O1O5/rate-limiter-go/internal/limiter"
+	"github.com/Nikhil-O1O5/rate-limiter-go/internal/middleware"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/redis"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/repo"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/service"
@@ -39,6 +41,13 @@ func main() {
 	resizeSvc := service.NewResizeService()
 	resizeHandler := handler.NewResizeHandler(resizeSvc)
 
+	tb := limiter.NewTokenBucket(rdb)
+	defaultCfg := limiter.BucketConfig{
+		Capacity:   10,
+		RefillRate: 2,
+	}
+	rl := middleware.RateLimit(tb, defaultCfg)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handler.Health(database, rdb))
 	userHandler.RegisterRoutes(mux)
@@ -47,7 +56,7 @@ func main() {
 	resizeHandler.RegisterRoutes(mux)
 
 	logrus.WithField("port", cfg.AppPort).Info("server starting")
-	if err := http.ListenAndServe(":"+cfg.AppPort, mux); err != nil {
+	if err := http.ListenAndServe(":"+cfg.AppPort, rl(mux)); err != nil {
 		logrus.WithError(err).Fatal("server error")
 	}
 }
