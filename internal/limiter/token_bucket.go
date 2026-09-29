@@ -28,21 +28,31 @@ type BucketConfig struct {
 type TokenBucket struct {
 	rdb    *redis.Client
 	script *redis.Script
+	nowFn  func() int64
 }
 
 func NewTokenBucket(rdb *redis.Client) *TokenBucket {
 	return &TokenBucket{
 		rdb:    rdb,
 		script: redis.NewScript(tokenBucketScript),
+		nowFn:  func() int64 { return time.Now().UnixMilli() },
+	}
+}
+
+func NewTokenBucketWithClock(rdb *redis.Client, nowFn func() int64) *TokenBucket {
+	return &TokenBucket{
+		rdb:    rdb,
+		script: redis.NewScript(tokenBucketScript),
+		nowFn:  nowFn,
 	}
 }
 
 // Allow checks whether the given user is allowed to proceed for the given endpoint.
 func (tb *TokenBucket) Allow(ctx context.Context, userID, endpoint string, cfg BucketConfig) (*Result, error) {
 	key := fmt.Sprintf("rate_limit:%s:%s", userID, endpoint)
-	nowMS := time.Now().UnixMilli()
 	ttl := int(cfg.Capacity/cfg.RefillRate) * 2 // bucket drains and refills twice before expiry
 
+	nowMS := tb.nowFn()
 	res, err := tb.script.Run(ctx, tb.rdb, []string{key},
 		cfg.Capacity,
 		cfg.RefillRate,
