@@ -1,0 +1,19 @@
+endpoints:
+  /hash:
+    capacity: 3
+    refill_rate: 0.5
+  /resize:
+    capacity: 5
+    refill_rate: 1
+  /search:
+    capacity: 10
+    refill_rate: 3
+  /feed:
+    capacity: 20
+    refill_rate: 5
+  /users:
+    capacity: 10
+    refill_rate: 2
+  default:
+    capacity: 10
+    refill_rate: 2

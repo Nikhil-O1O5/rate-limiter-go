@@ -3,7 +3,7 @@ build:
 	@chmod +x ./bin/app
 
 run: build
-	@./bin/app
+	@export $(shell cat .env | xargs) && ./bin/app
 
 up:
 	@docker compose up -d

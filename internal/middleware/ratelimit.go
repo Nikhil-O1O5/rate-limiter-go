@@ -4,15 +4,13 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Nikhil-O1O5/rate-limiter-go/internal/config"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/handler"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/limiter"
 	"github.com/sirupsen/logrus"
 )
 
-// RateLimit wraps a handler and enforces per-user token bucket limits.
-// User identity is taken from the X-User-ID request header.
-// cfg is the bucket config applied to every endpoint — phase 4 makes this per-endpoint.
-func RateLimit(tb *limiter.TokenBucket, cfg limiter.BucketConfig) func(http.Handler) http.Handler {
+func RateLimit(tb *limiter.TokenBucket, rlCfg *config.RateLimitConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID := r.Header.Get("X-User-ID")
@@ -22,6 +20,7 @@ func RateLimit(tb *limiter.TokenBucket, cfg limiter.BucketConfig) func(http.Hand
 			}
 
 			endpoint := r.URL.Path
+			cfg := rlCfg.For(endpoint)
 
 			result, err := tb.Allow(r.Context(), userID, endpoint, cfg)
 			if err != nil {
@@ -31,6 +30,7 @@ func RateLimit(tb *limiter.TokenBucket, cfg limiter.BucketConfig) func(http.Hand
 			}
 
 			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
+			w.Header().Set("X-RateLimit-Limit", strconv.FormatFloat(cfg.Capacity, 'f', 0, 64))
 
 			if !result.Allowed {
 				w.Header().Set("Retry-After", strconv.FormatInt(result.RetryAfterMS/1000, 10))

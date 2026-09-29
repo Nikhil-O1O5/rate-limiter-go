@@ -41,12 +41,13 @@ func main() {
 	resizeSvc := service.NewResizeService()
 	resizeHandler := handler.NewResizeHandler(resizeSvc)
 
-	tb := limiter.NewTokenBucket(rdb)
-	defaultCfg := limiter.BucketConfig{
-		Capacity:   10,
-		RefillRate: 2,
+	rlCfg, err := config.LoadRateLimitConfig("config.yaml")
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to load rate limit config")
 	}
-	rl := middleware.RateLimit(tb, defaultCfg)
+
+	tb := limiter.NewTokenBucket(rdb)
+	rl := middleware.RateLimit(tb, rlCfg)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handler.Health(database, rdb))

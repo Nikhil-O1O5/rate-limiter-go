@@ -16,9 +16,9 @@ func Load() *Config {
 	return &Config{
 		DBHost:     getEnv("DB_HOST", "localhost"),
 		DBPort:     getEnv("DB_PORT", "5432"),
-		DBUser:     getEnv("DB_USER", "rl_user"),
-		DBPassword: getEnv("DB_PASSWORD", "rl_pass"),
-		DBName:     getEnv("DB_NAME", "rl_db"),
+		DBUser:     getEnv("DB_USER", ""),
+		DBPassword: getEnv("DB_PASSWORD", ""),
+		DBName:     getEnv("DB_NAME", ""),
 		RedisAddr:  getEnv("REDIS_ADDR", "localhost:6379"),
 		AppPort:    getEnv("APP_PORT", "8080"),
 	}
