@@ -33,10 +33,18 @@ func main() {
 	searchSvc := service.NewSearchService(searchRepo)
 	searchHandler := handler.NewSearchHandler(searchSvc)
 
+	hashSvc := service.NewHashService()
+	hashHandler := handler.NewHashHandler(hashSvc)
+
+	resizeSvc := service.NewResizeService()
+	resizeHandler := handler.NewResizeHandler(resizeSvc)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handler.Health(database, rdb))
 	userHandler.RegisterRoutes(mux)
 	searchHandler.RegisterRoutes(mux)
+	hashHandler.RegisterRoutes(mux)
+	resizeHandler.RegisterRoutes(mux)
 
 	logrus.WithField("port", cfg.AppPort).Info("server starting")
 	if err := http.ListenAndServe(":"+cfg.AppPort, mux); err != nil {
