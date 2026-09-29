@@ -143,6 +143,35 @@ func TestAllow_RemainingDecrementsCorrectly(t *testing.T) {
 	}
 }
 
+// BenchmarkAllow_Sequential measures single-goroutine throughput of Allow.
+func BenchmarkAllow_Sequential(b *testing.B) {
+	mr := miniredis.RunT(b)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	tb := limiter.NewTokenBucket(rdb)
+	cfg := limiter.BucketConfig{Capacity: 1e9, RefillRate: 1e9} // effectively unlimited
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tb.Allow(context.Background(), "bench-user", "/feed", cfg) //nolint:errcheck
+	}
+}
+
+// BenchmarkAllow_Parallel measures throughput when Allow is called from
+// multiple goroutines concurrently.
+func BenchmarkAllow_Parallel(b *testing.B) {
+	mr := miniredis.RunT(b)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	tb := limiter.NewTokenBucket(rdb)
+	cfg := limiter.BucketConfig{Capacity: 1e9, RefillRate: 1e9}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			tb.Allow(context.Background(), "bench-user", "/feed", cfg) //nolint:errcheck
+		}
+	})
+}
+
 // TestAllow_ConcurrentRequests fires N goroutines simultaneously against the
 // same bucket and asserts that the number of allowed requests never exceeds
 // capacity. This catches races where non-atomic read-modify-write would let
