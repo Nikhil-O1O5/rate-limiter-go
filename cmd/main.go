@@ -7,10 +7,12 @@ import (
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/db"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/handler"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/limiter"
+	_ "github.com/Nikhil-O1O5/rate-limiter-go/internal/metrics"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/middleware"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/redis"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/repo"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/service"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )
 
@@ -49,15 +51,20 @@ func main() {
 	tb := limiter.NewTokenBucket(rdb)
 	rl := middleware.RateLimit(tb, rlCfg)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", handler.Health(database, rdb))
-	userHandler.RegisterRoutes(mux)
-	searchHandler.RegisterRoutes(mux)
-	hashHandler.RegisterRoutes(mux)
-	resizeHandler.RegisterRoutes(mux)
+	// apiMux is rate-limited; internalMux bypasses the middleware.
+	apiMux := http.NewServeMux()
+	userHandler.RegisterRoutes(apiMux)
+	searchHandler.RegisterRoutes(apiMux)
+	hashHandler.RegisterRoutes(apiMux)
+	resizeHandler.RegisterRoutes(apiMux)
+
+	root := http.NewServeMux()
+	root.Handle("GET /metrics", promhttp.Handler())
+	root.HandleFunc("GET /health", handler.Health(database, rdb))
+	root.Handle("/", rl(apiMux))
 
 	logrus.WithField("port", cfg.AppPort).Info("server starting")
-	if err := http.ListenAndServe(":"+cfg.AppPort, rl(mux)); err != nil {
+	if err := http.ListenAndServe(":"+cfg.AppPort, root); err != nil {
 		logrus.WithError(err).Fatal("server error")
 	}
 }

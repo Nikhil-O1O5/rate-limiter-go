@@ -7,6 +7,7 @@ import (
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/config"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/handler"
 	"github.com/Nikhil-O1O5/rate-limiter-go/internal/limiter"
+	"github.com/Nikhil-O1O5/rate-limiter-go/internal/metrics"
 	"github.com/sirupsen/logrus"
 )
 
@@ -32,11 +33,16 @@ func RateLimit(tb *limiter.TokenBucket, rlCfg *config.RateLimitConfig) func(http
 			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
 			w.Header().Set("X-RateLimit-Limit", strconv.FormatFloat(cfg.Capacity, 'f', 0, 64))
 
+			metrics.RateLimitRemaining.WithLabelValues(endpoint).Observe(float64(result.Remaining))
+
 			if !result.Allowed {
+				metrics.RateLimitDecisions.WithLabelValues(endpoint, "denied").Inc()
 				w.Header().Set("Retry-After", strconv.FormatInt(result.RetryAfterMS/1000, 10))
 				handler.WriteError(w, http.StatusTooManyRequests, "rate limit exceeded")
 				return
 			}
+
+			metrics.RateLimitDecisions.WithLabelValues(endpoint, "allowed").Inc()
 
 			next.ServeHTTP(w, r)
 		})
