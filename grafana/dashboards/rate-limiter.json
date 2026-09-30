@@ -1,0 +1,67 @@
+{
+  "title": "Rate Limiter",
+  "uid": "rate-limiter",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (allowed vs denied)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "stacking": { "mode": "normal" } } },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*denied.*" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byRegexp", "options": ".*allowed.*" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "expr": "sum by (endpoint, result) (rate(rate_limit_decisions_total[1m]))",
+          "legendFormat": "{{endpoint}} — {{result}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Denial Rate % per Endpoint",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1 }
+      },
+      "targets": [
+        {
+          "expr": "sum by (endpoint) (rate(rate_limit_decisions_total{result=\"denied\"}[1m])) / sum by (endpoint) (rate(rate_limit_decisions_total[1m]))",
+          "legendFormat": "{{endpoint}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Remaining Tokens Distribution",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (endpoint, le) (rate(rate_limit_remaining_tokens_bucket[1m])))",
+          "legendFormat": "p50 {{endpoint}}"
+        },
+        {
+          "expr": "histogram_quantile(0.1, sum by (endpoint, le) (rate(rate_limit_remaining_tokens_bucket[1m])))",
+          "legendFormat": "p10 {{endpoint}}"
+        }
+      ]
+    }
+  ]
+}
